@@ -641,6 +641,7 @@ class Trigonometric(Function):
 
 
 
+
 def filter_real(zL: list_constant):
     return [z.real for z in zL if equal(z.imag, 0)]
 
