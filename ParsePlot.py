@@ -402,7 +402,7 @@ class Polynomial(Function):
                 return Vector.scale(Polynomial._get_coefL_by_Node(node.right), -1)
             else:
                 raise UnknownOperator(node.data)
-        else: # elif node.type == "binary_oper":
+        elif node.type == "binary_oper":
             if node.data == "+":
                 return Vector.add(Polynomial._get_coefL_by_Node(node.left),
                     Polynomial._get_coefL_by_Node(node.right))
@@ -426,6 +426,8 @@ class Polynomial(Function):
                     return _temp
             else:
                 raise UnknownOperator(node.data)
+        else:
+            raise UnknownOperator(node.data)
 
 
     @staticmethod
@@ -528,7 +530,7 @@ class Polynomial(Function):
             if node.data in ("+", "-"):
                 return Polynomial._is_polynomial_node(node.right)
             else:
-                raise UnknownOperator(node.data)
+                return False #FIXME
         elif node.type == "binary_oper":
             if node.data in ("+", "-", "*"):
                 return Polynomial._is_polynomial_node(node.left) \
@@ -538,7 +540,7 @@ class Polynomial(Function):
                     or Polynomial._is_polynomial_node(node.left) \
                         and node.right.type == "const" and is_str_integer(node.right.data) and (int(node.right.data) >= 0 if Setting.naive_zeroth_power else int(node.right.data) > 0)
             else:
-                raise UnknownOperator(node.data)
+                return False #FIXME
         else: # elif node.type == "func" #FIXME
             return False
 
@@ -573,7 +575,7 @@ class Trigonometric(Function):
             if node.data in ("+", "-"):
                 return Trigonometric.is_trigonometric_node(node.right)
             else:
-                raise UnknownOperator(node.data)
+                return False #FIXME
         elif node.type == "binary_oper":
             if node.data == "*":
                 if "const" in (node.left.type, node.right.type):
@@ -582,15 +584,15 @@ class Trigonometric(Function):
                 else:
                     return False #FIXME
             else:
-                raise UnknownOperator(node.data)
+                return False #FIXME
         elif node.type == "func":
-            if node.data == "sin":
+            if node.data in ("sin", "cos", "tan", "csc", "sec", "cot"):
                 right_func = Function(node.right)
                 return right_func.func_type == Polynomial and right_func.degree <= 1
             else:
                 return False #FIXME
         else:
-            raise Exception("Unknown type")
+            return False #FIXME
 
     @staticmethod
     def get_amp_and_shift(f: Function):
@@ -628,9 +630,16 @@ class Trigonometric(Function):
         elif node.type == "func": #FIXME
             right_func = Function(node.right)
             if right_func.func_type == Polynomial and right_func.degree == 1:
-                if node.data == "sin": # sin(ax+b)
+                if node.data in ("sin", "cos", "tan", "csc", "sec", "cot"): # sin(ax+b)
                     a, b = Function(node.right).coefL
-                    return sin, 1/a, 1, -b/a, 0
+                    
+                    match node.data:
+                        case "sin": return sin, 1/a, 1, -b/a, 0
+                        case "cos": return cos, 1/a, 1, -b/a, 0
+                        case "tan": return tan, 1/a, 1, -b/a, 0
+                        case "csc": return csc, 1/a, 1, -b/a, 0
+                        case "sec": return sec, 1/a, 1, -b/a, 0
+                        case "cot": return cot, 1/a, 1, -b/a, 0
                 else:
                     raise UnknownOperator(node.data)
             else:
