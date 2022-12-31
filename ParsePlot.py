@@ -1,12 +1,14 @@
 from __future__ import annotations
 from math import nan, inf
+from fractions import Fraction
+from decimal import Decimal
 from typing import Iterable, Callable
 import matplotlib.pyplot as plt
 import numpy as np
-from numpy import float64
 from math import sin, cos, tan, pi, factorial
 from warnings import warn
 from multimethod import multimethod
+from dataclasses import dataclass
 
 from MTree import Node, treeize, null_node
 
@@ -34,8 +36,7 @@ def collatz_decay_time(n):
             return i
 
 
-constant = int | float | complex
-list_constant = list[int] | list[float] | list[complex]
+
 
 class UnknownOperator(Exception):
     def __init__(self, oper):
@@ -57,6 +58,279 @@ class Setting:
     sign_contribution_in_add_and_sub = True # a+(+b) = a+b, a-(+b) = a-b, a+(-b) = a-b, a-(-b) = a+b
     use_additive_identity = True # a+0 = 0+a = a
     use_subtractive_right_identity = True # a-0 = a
+
+
+
+class mcomplex:
+    def __init__(self, real_or_complex: int | Fraction | Decimal | float | complex | mcomplex, imag: int | Fraction | Decimal | float = 0): #type: ignore
+        if isinstance(real_or_complex, int | Fraction | Decimal | float):
+            real = real_or_complex
+
+            self.real = real
+            self.imag = imag
+        elif isinstance(real_or_complex, complex | mcomplex):
+            _complex = real_or_complex
+            
+            self.real = _complex.real
+            self.imag = _complex.imag
+
+    def __repr__(self):
+        return f"{str(self.real)} + {str(self.imag)}i"
+
+
+
+    def __add__(self, other):
+        real = Constant(self.real) + Constant(other.real)
+        imag = Constant(self.imag) + Constant(other.imag)
+
+        return mcomplex(real.val, imag.val)
+
+    def __sub__(self, other):
+        real = Constant(self.real) - Constant(other.real)
+        imag = Constant(self.imag) - Constant(other.imag)
+
+        return mcomplex(real.val, imag.val)
+
+    def __mul__(self, other):
+        real = Constant(self.real) * Constant(other.real) - Constant(self.imag) * Constant(other.imag)
+        imag = Constant(self.real) * Constant(other.imag) + Constant(self.imag) * Constant(other.real)
+
+        return mcomplex(real.val, imag.val)
+
+    def __truediv__(self, other) -> mcomplex:
+        real = (Constant(self.real) * Constant(other.real) + Constant(self.imag) * Constant(other.imag))   /   (other.real**2 + other.imag**2)
+        imag = (Constant(self.imag) * Constant(other.real) - Constant(self.real) * Constant(other.imag))   /   (other.real**2 + other.imag**2)
+
+        return mcomplex(real.val, imag.val)
+
+    def __rpow__(self, other):
+        val = Constant.strictize(self)
+        if isinstance(val, int) and val >= 0:
+            return other**val
+        else:
+            return other**complex(float(self.real), float(self.imag))
+
+    def __pow__(self, other):
+        val = Constant.strictize(other)
+        if isinstance(val, int) and val >= 0:
+            _product = 1
+            for _ in range(val):
+                _product *= other
+
+            return _product
+        else:
+            return complex(float(self.real), float(self.imag))**other
+
+
+
+
+class Constant:
+    def __init__(self, string_or_val: str   |   int | Fraction | Decimal | float | complex | mcomplex):
+        if isinstance(string_or_val, str):
+            string = string_or_val
+
+            if is_integer(string):
+                self.val = int(string)
+            elif is_decimal(string):
+                self.val = Decimal(string)
+            elif is_float(string):
+                self.val = float(string)
+            elif is_complex(string):
+                self.val = mcomplex(string)
+            else:
+                raise Exception("Invalid string")
+        elif isinstance(string_or_val, int | Fraction | Decimal | float | complex | mcomplex):
+            val = string_or_val
+
+            if not isinstance(val, complex):
+                self.val = Constant.strictize(val)
+            else:
+                self.val = Constant.strictize(mcomplex(val))
+
+    def __repr__(self):
+        return repr(self.val)
+
+    @staticmethod
+    def strictize(val: int | Fraction | Decimal | float | mcomplex): #type: ignore
+        """Non-float object will be replaced to more strict object.\\
+        e.g. Fraction(5, 1) -> int(5)\\
+
+        Fraction -> int\\
+        mcomplex -> real"""
+
+
+        if isinstance(val, Fraction) and val.denominator == 1:
+            val = int(val)
+        elif isinstance(val, mcomplex) and (imag := Constant.strictize(val.imag) == 0) and isinstance(imag, int):
+            val = val.real
+
+        return val
+
+
+
+    def __add__(self, other: Constant):
+        a, b = self.val, other.val
+
+        if isinstance(a, float):
+            if isinstance(b, mcomplex):
+                b.real = float(b.real)
+            else:
+                b = float(b)
+        elif isinstance(b, float):
+            if isinstance(a, mcomplex):
+                a.real = float(a.real)
+            else:
+                a = float(a)
+        elif isinstance(a, Decimal) and isinstance(b, Decimal | Fraction | int):
+            if isinstance(b, Fraction):
+                b = Decimal(b.numerator) / Decimal(b.denominator)
+            else:
+                b = Decimal(b)
+        elif isinstance(b, Decimal) and isinstance(a, Decimal | Fraction | int):
+            if isinstance(a, Fraction):
+                a = Decimal(a.numerator) / Decimal(a.denominator)
+            else:
+                a = Decimal(a)
+
+        return Constant(a+b) #type: ignore
+
+    def __sub__(self, other):
+        a, b = self.val, other.val
+
+        if isinstance(a, float):
+            if isinstance(b, mcomplex):
+                b.real = float(b.real)
+            else:
+                b = float(b)
+        elif isinstance(b, float):
+            if isinstance(a, mcomplex):
+                a.real = float(a.real)
+            else:
+                a = float(a)
+        elif isinstance(a, Decimal) and isinstance(b, Decimal | Fraction | int):
+            if isinstance(b, Fraction):
+                b = Decimal(b.numerator) / Decimal(b.denominator)
+            else:
+                b = Decimal(b)
+        elif isinstance(b, Decimal) and isinstance(a, Decimal | Fraction | int):
+            if isinstance(a, Fraction):
+                a = Decimal(a.numerator) / Decimal(a.denominator)
+            else:
+                a = Decimal(a)
+
+        return Constant(a-b) #type: ignore
+
+    def __mul__(self, other):
+        a, b = self.val, other.val
+
+        if isinstance(a, float):
+            if isinstance(b, mcomplex):
+                b.real = float(b.real)
+                b.imag = float(b.imag)
+            else:
+                b = float(b)
+        elif isinstance(b, float):
+            if isinstance(a, mcomplex):
+                a.real = float(a.real)
+                a.imag = float(a.imag)
+            else:
+                a = float(a)
+        elif isinstance(a, Decimal) and isinstance(b, Decimal | Fraction | int):
+            if isinstance(b, Fraction):
+                b = Decimal(b.numerator) / Decimal(b.denominator)
+            else:
+                b = Decimal(b)
+        elif isinstance(b, Decimal) and isinstance(a, Decimal | Fraction | int):
+            if isinstance(a, Fraction):
+                a = Decimal(a.numerator) / Decimal(a.denominator)
+            else:
+                a = Decimal(a)
+
+        return Constant(a*b) #type: ignore
+
+    def __truediv__(self, other):
+        a, b = self.val, other.val
+
+        if isinstance(a, float):
+            if isinstance(b, mcomplex):
+                b.real = float(b.real)
+                b.imag = float(b.imag)
+            else:
+                b = float(b)
+        elif isinstance(b, float):
+            if isinstance(a, mcomplex):
+                a.real = float(a.real)
+                a.imag = float(a.imag)
+            else:
+                a = float(a)
+        elif isinstance(a, Decimal) and isinstance(b, Decimal | Fraction | int):
+            if isinstance(b, Fraction):
+                b = Decimal(b.numerator) / Decimal(b.denominator)
+            else:
+                b = Decimal(b)
+        elif isinstance(b, Decimal) and isinstance(a, Decimal | Fraction | int):
+            if isinstance(a, Fraction):
+                a = Decimal(a.numerator) / Decimal(a.denominator)
+            else:
+                a = Decimal(a)
+
+        return Constant(a/b) #type: ignore
+
+    def __rpow__(self, other):
+        b, a = self.val, other.val
+
+        if isinstance(a, float):
+            if isinstance(b, mcomplex):
+                ...
+            else:
+                b = float(b)
+        elif isinstance(b, float):
+            if isinstance(a, mcomplex):
+                ...
+            else:
+                a = float(a)
+        elif isinstance(b, Decimal):
+            b = float(b)
+        elif isinstance(b, Fraction):
+            b = float(b)
+
+        return Constant(a**b) #type: ignore
+
+    def __floordiv__(self, other):
+        a, b = self.val, other.val
+
+        if isinstance(a, mcomplex) or isinstance(b, mcomplex):
+            raise Exception("Floordiv is invalid for mcomplex")
+        elif isinstance(a, float) or isinstance(b, float):
+            a, b = float(a), float(b)
+            return a//b
+        else:
+            if isinstance(a, Decimal) and isinstance(b, Fraction):
+                b = Decimal(b.numerator) / Decimal(b.denominator)
+            elif isinstance(b, Decimal) and isinstance(a, Fraction):
+                a = Decimal(a.numerator) / Decimal(a.denominator)
+
+            return Constant(int(a//b)) #type: ignore
+
+    def __mod__(self, other):
+        a, b = self.val, other.val
+
+        if isinstance(a, mcomplex) or isinstance(b, mcomplex):
+            raise Exception("Mod is invalid for mcomplex")
+        elif isinstance(a, float) or isinstance(b, float):
+            a, b = float(a), float(b)
+            return a%b
+        else:
+            if isinstance(a, Decimal) and isinstance(b, Fraction):
+                b = Decimal(b.numerator) / Decimal(b.denominator)
+            elif isinstance(b, Decimal) and isinstance(a, Fraction):
+                a = Decimal(a.numerator) / Decimal(a.denominator)
+
+            return Constant(int(a%b)) #type: ignore
+
+
+
+
 
 class Vector:
     @staticmethod
@@ -91,16 +365,19 @@ class Vector:
             for n in range(len(u)-1 + len(v)-1 + 1)]
 
 
+
+
+
 class Function:
     @multimethod
     def __init__(f, string: str): #type: ignore
         f.adam_node = treeize(string)
-        f.after_init()
+        f.post_init()
 
     @multimethod
     def __init__(f, node: Node): #type: ignore
         f.adam_node = node
-        f.after_init()
+        f.post_init()
 
     def remove_trivial_operation(f): #type: ignore
         '''replace additional operation depending on Setting'''
@@ -219,10 +496,14 @@ class Function:
                 if node.type == "binary_oper" and node.data == "-" and equal(numberize_str(node.right.data), 0) else null_node)
 
 
-    def after_init(f): #type: ignore
+    def post_init(f): #type: ignore
         f.remove_trivial_operation()
-        f.func_type = f._get_func_type()
+        f.val = f.calc()
         f._declare_attr_by_func_type()
+
+    def calc(f): #type: ignore
+        if f.adam_node.type == "const":
+            return Constant(f.adam_node.data)
 
     @staticmethod
     def is_this_type(f: Function):
@@ -230,17 +511,15 @@ class Function:
 
     def _get_func_type(f): #type: ignore
         '''
-        get `func_type` based on `f.adam_node`
+        get `func_type` based on `f.calc`
         '''
 
-        for cls in Function.__subclasses__():
-            if cls.is_this_type(f):
-                return cls
-
-        return Function
+        ...
 
     def _declare_attr_by_func_type(f): #type: ignore
-        if f.func_type == Polynomial: # constants are valid Polynomial with degree=0
+        func_type = f._get_func_type()
+
+        if func_type == Polynomial: # constants are valid Polynomial with degree=0
             coefL = Polynomial.get_coefL(f)
             f.degree = Polynomial.get_degree(coefL)
             f.coefL = coefL[:f.degree+1]
@@ -248,18 +527,19 @@ class Function:
             f.remove_trivial_operation()
             pass
 
-        elif f.func_type == Trigonometric:
+        elif func_type == Trigonometric:
             f.trig_type, f.x_amp, f.y_amp, f.x_shift, f.y_shift = Trigonometric.get_amp_and_shift(f)
             f.amplitude = f.y_amp
 
 
 
-        f.zeroL = f.func_type.get_zeroL(f)
-        f.realzeroL = filter_real(f.zeroL)
+    @staticmethod
+    def get_zeroL(f: Function) -> list_constant:
+        return f.val.get_zeroL()
 
     @staticmethod
-    def get_zeroL(f: Function) -> list_constant: #FIXME
-        return []
+    def get_realzeroL(f: Function) -> list_constant:
+        return f.val.get_realzeroL()
 
     def plot(f, x_range=np.arange(-10, 10, 1/16)): #type: ignore
         rc = {"xtick.direction" : "inout", "ytick.direction" : "inout",
@@ -287,70 +567,20 @@ class Function:
             plt.show()
 
     def deriv(f, xL: Iterable = []): #type: ignore
-        if f.func_type == Polynomial:
-            if f.degree == 0:
-                return Function("0")
-            else:
-                deriv_coefL = [(f.degree-j)*coef for j, coef in enumerate(f.coefL[:-1])]
-                c_0 = deriv_coefL[-1]
-                return Function("+".join([f"{str(c_i)}x^{f.degree-1-i}" for i, c_i in enumerate(deriv_coefL[:-1]) if not equal(c_i, 0)] + ([str(c_0)] if not equal(c_0, 0) else [])))
-        else: #FIXME: return Polynomial approx
-            raise
-            # if len(xL) < 2:
-            #     raise Exception("Not big enough x range")
+        return f.val.deriv(xL)
 
-            # yL = [f(x) for x in xL]
+    def integ(f, xL: Iterable = [], C=0) -> Function: #type: ignore
+        return f.val.integ(C)
 
-            # f_prime = []
-            # prev_x = xL[0]
-            # prev_y = yL[0]
-            # for x, y in zip(xL[1:], yL[1:]):
-            #     dx = x - prev_x
-            #     dy = y - prev_y
-            #     f_prime.append(dy/dx)
-
-            # f_prime.append(f_prime[-1])
-            # return np.array(f_prime)
-
-    def integ(f, C=0) -> Function: #type: ignore
-        if f.func_type == Polynomial:
-            if f.degree == 0 and equal(f.coefL[0], 0):
-                return Function(str(C))
-            else:
-                integ_coefL = [coef/(f.degree-j+1) for j, coef in enumerate(f.coefL)]
-                return Function("+".join([f"{str(c_i)}x^{f.degree+1-i}" for i, c_i in enumerate(integ_coefL) if not equal(c_i, 0)] + ([str(C)] if not equal(C, 0) else [])))
-        else: #FIXME
-            raise
-
-    def taylor(f, xL, a=0, n=5) -> Function: #type: ignore
-        if f.func_type == Polynomial:
-            return f
-        else: #FIXME: return polynomial
-            raise
-        #     yL = [f(x) for x in xL]
-        #     out = np.array([0 for _ in range(len(f))], float64)
-        #     a_index = np.where(xL == a)[0][0]
-        #     for i in range(len(yL)):
-        #         t = [yL[a_index]/factorial(i)*(x-a)**i for x in xL]
-        #         out += np.array(t)
-        #         yL = f.deriv(xL)
-
-        #     return out
+    def taylor(f, xL: Iterable = [], a=0, n=5) -> Function: #type: ignore
+        return f.val.taylor(xL, a, n)
 
 
     def __call__(f, x): #type: ignore
-        if f.func_type == Polynomial:
-            summation = f.coefL[-1]
-            for i, c_i in enumerate(f.coefL[-2::-1], start=1):
-                summation += c_i * x**i
-            return summation
-        elif f.func_type == Trigonometric:
-            return f.trig_type((x-f.x_shift)/f.x_amp)*f.y_amp + f.y_shift
-        else:
-            raise #FIXME
+        return f.val()
 
     def __repr__(f): #type: ignore
-        return repr(f.adam_node)
+        return repr(f.val)
 
 
 
